@@ -28,9 +28,18 @@ Future<void> _selfTest(AppController controller) async {
   if (path == null || path.isEmpty) return;
   final report = <String, Object?>{'scam': 1, 'nom': controller.settings.deviceName};
   try {
-    final pc = await createPeerConnection({'iceServers': <Object>[]});
-    final offer = await pc.createOffer({'offerToReceiveVideo': true, 'offerToReceiveAudio': true});
-    report['webrtc'] = (offer.sdp ?? '').contains('m=video');
+    final pc = await createPeerConnection({'iceServers': <Object>[], 'sdpSemantics': 'unified-plan'});
+    // Comme un écran qui reçoit : une piste vidéo et une piste audio en réception seule.
+    for (final kind in [RTCRtpMediaType.RTCRtpMediaTypeVideo, RTCRtpMediaType.RTCRtpMediaTypeAudio]) {
+      await pc.addTransceiver(
+        kind: kind,
+        init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+      );
+    }
+    final offer = await pc.createOffer();
+    final sdp = offer.sdp ?? '';
+    report['webrtc'] = sdp.contains('m=video') && sdp.contains('m=audio');
+    report['sdp'] = sdp.length;
     await pc.close();
   } on Object catch (e) {
     report['webrtc'] = false;
