@@ -26,8 +26,8 @@ class PairingExchange {
     required this.peerId,
     required this.peerName,
     required this.code,
-    required List<int> key,
-  }) : _key = key {
+    required this.key,
+  }) {
     _timeout = Timer(Limits.pairingTimeout, () => _finish(null, 'Le délai d\'appairage est dépassé.'));
   }
 
@@ -38,7 +38,9 @@ class PairingExchange {
 
   /// Code à six chiffres, affiché sur les deux écrans.
   final String code;
-  final List<int> _key;
+
+  /// Clé d'appairage tirée de l'échange (gardée une fois les deux confirmations reçues).
+  final List<int> key;
   late final Timer _timeout;
   final _result = Completer<PairedDevice?>();
   bool? _ownAnswer;
@@ -79,7 +81,7 @@ class PairingExchange {
 
   void _check() {
     if (_ownAnswer == true && _peerConfirmed) {
-      _finish(PairedDevice(id: peerId, name: peerName, key: _key), null);
+      _finish(PairedDevice(id: peerId, name: peerName, key: key), null);
     }
   }
 

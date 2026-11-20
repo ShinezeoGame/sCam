@@ -29,6 +29,9 @@ class CameraLink {
   String? error;
   bool muted = false;
 
+  /// Éclaircir l'image (la nuit), sur cet écran seulement.
+  bool brighten = false;
+
   /// Écouter en arrière-plan : la transmission continue hors de la page de la caméra.
   bool listening = false;
 
@@ -275,6 +278,13 @@ class ScreenController extends ChangeNotifier {
     if (camera == null) return;
     camera.muted = muted;
     camera.session?.setMuted(muted);
+    notifyListeners();
+  }
+
+  void setBrighten(String cameraId, bool brighten) {
+    final camera = _links[cameraId];
+    if (camera == null) return;
+    camera.brighten = brighten;
     notifyListeners();
   }
 

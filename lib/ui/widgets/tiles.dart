@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 
 /// Surface de base de l'interface : fond uni, bord fin, coins arrondis.
-/// Devient ambrée quand [active] est vrai (demande d'envoi à traiter).
+/// Devient ambrée quand [active] est vrai (code à comparer, alerte récente).
 class Tile extends StatelessWidget {
   const Tile({
     super.key,

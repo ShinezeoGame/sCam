@@ -64,7 +64,7 @@ class AppButton extends StatelessWidget {
         child: InkWell(
           onTap: enabled ? onPressed : null,
           child: Container(
-            height: compact ? 40 : 46,
+            height: compact ? 44 : 46,
             padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 16),
             child: Row(
               mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
@@ -88,7 +88,7 @@ class SquareButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     required this.tooltip,
-    this.size = 40,
+    this.size = 44,
     this.busy = false,
   });
 
@@ -161,7 +161,7 @@ class AppSwitch extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTap: () => onChanged(!value),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,

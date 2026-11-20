@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Couleurs de l'interface, désignées par leur rôle. Les widgets n'utilisent que ces
 /// rôles, jamais de couleur en dur : le thème clair et le thème sombre restent cohérents.
-/// Palette reprise de sDash.
+/// Palette reprise de sDash et sDrop.
 @immutable
 class AppColors {
   const AppColors({
@@ -46,7 +46,7 @@ class AppColors {
   /// Fond des messages d'information.
   final Color accentSoft;
 
-  /// Fond d'une tuile mise en avant (demande d'envoi reçue), et texte posé dessus.
+  /// Fond d'une tuile mise en avant (code d'appairage, alerte), et texte posé dessus.
   final Color active;
   final Color onActive;
 
@@ -203,6 +203,20 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     iconTheme: IconThemeData(color: c.textMuted, size: 22),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: c.accent),
+    sliderTheme: SliderThemeData(
+      activeTrackColor: c.accent,
+      inactiveTrackColor: c.surfaceMuted,
+      thumbColor: c.accent,
+      overlayColor: c.accent.withValues(alpha: 0.14),
+      trackHeight: 6,
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: c.surface,
+      surfaceTintColor: c.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Dim.tileRadius)),
+      titleTextStyle: t.sectionTitle,
+      contentTextStyle: t.body,
+    ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: c.accent,
       selectionColor: c.accent.withValues(alpha: 0.3),
