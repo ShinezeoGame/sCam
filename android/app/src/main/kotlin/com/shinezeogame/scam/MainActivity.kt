@@ -3,20 +3,25 @@ package com.shinezeogame.scam
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
+import android.os.Environment
 import android.os.Build
 import android.os.PowerManager
+import android.provider.MediaStore
 import android.provider.Settings
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 /**
  * Fonctions propres à Android, appelées depuis `lib/data/system_bridge.dart` (canal
@@ -72,6 +77,23 @@ class MainActivity : FlutterActivity() {
                     "sansRestrictionBatterie" -> result.success(batteryUnrestricted())
                     "demanderSansRestrictionBatterie" -> {
                         requestBatteryUnrestricted()
+                        result.success(null)
+                    }
+                    "rangerVideo" -> {
+                        val path = call.argument<String>("chemin") ?: ""
+                        val name = call.argument<String>("nom") ?: "extrait.mp4"
+                        // La copie peut prendre un moment : hors du fil de l'interface.
+                        Thread {
+                            val saved = try {
+                                saveVideo(File(path), name)
+                            } catch (e: Exception) {
+                                null
+                            }
+                            runOnUiThread { result.success(saved) }
+                        }.start()
+                    }
+                    "ouvrirVideo" -> {
+                        openVideo(call.arguments as String)
                         result.success(null)
                     }
                     "ecranAllume" -> {
@@ -225,6 +247,52 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             // Certains téléphones n'ont pas cette demande : on ouvre la liste générale.
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
+    }
+
+    // ── Extraits téléchargés ──
+
+    /** Range une vidéo dans la galerie (Films/sCam) ; renvoie son adresse content://. */
+    private fun saveVideo(source: File, name: String): String? {
+        if (Build.VERSION.SDK_INT >= 29) {
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, name)
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/sCam")
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+            val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+            contentResolver.openOutputStream(uri)?.use { out -> source.inputStream().use { it.copyTo(out) } }
+            values.clear()
+            values.put(MediaStore.Video.Media.IS_PENDING, 0)
+            contentResolver.update(uri, values, null, null)
+            return uri.toString()
+        }
+        // Android 7 à 9 : dossier Films de sCam, puis indexation pour obtenir une adresse
+        // que le lecteur vidéo peut ouvrir.
+        val folder = File(getExternalFilesDir(Environment.DIRECTORY_MOVIES), "sCam").apply { mkdirs() }
+        val target = File(folder, name)
+        source.copyTo(target, overwrite = true)
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var scanned: Uri? = null
+        MediaScannerConnection.scanFile(this, arrayOf(target.path), arrayOf("video/mp4")) { _, uri ->
+            scanned = uri
+            latch.countDown()
+        }
+        latch.await(10, java.util.concurrent.TimeUnit.SECONDS)
+        return scanned?.toString()
+    }
+
+    private fun openVideo(uri: String) {
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(Uri.parse(uri), "video/mp4")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            )
+        } catch (e: Exception) {
+            // Aucun lecteur vidéo : l'extrait reste dans la galerie.
         }
     }
 

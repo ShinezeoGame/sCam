@@ -35,8 +35,18 @@ class CameraLink {
   /// Écouter en arrière-plan : la transmission continue hors de la page de la caméra.
   bool listening = false;
 
+  /// Extraits gardés sur la caméra, le plus récent d'abord.
+  List<CameraClip> clips = const [];
+
+  /// Téléchargements en cours : avancement de 0 à 1, par extrait.
+  final downloads = <String, double>{};
+
+  /// Extraits déjà téléchargés sur cet écran : où ils ont été rangés.
+  final saved = <String, String>{};
+
   int _attempts = 0;
   Timer? _retry;
+  final _chunks = <String, Completer<Map<String, dynamic>>>{};
   bool _connecting = false;
   CameraAlert? lastAlert;
 
@@ -207,6 +217,22 @@ class ScreenController extends ChangeNotifier {
         case 'fin':
           await camera.session?.close();
           camera.session = null;
+        case 'extraits':
+          final list = message['liste'];
+          if (list is List) {
+            camera.clips = [for (final raw in list.take(200)) ?CameraClip.fromJson(raw)]
+              ..sort((a, b) => b.at.compareTo(a.at));
+          }
+        case 'morceau':
+          final waiting = camera._chunks.remove('${message['id']}:${message['debut']}');
+          if (waiting != null) {
+            waiting.complete(message);
+          } else if (message['erreur'] == true) {
+            // Refus pour un extrait inconnu : on libère toutes les attentes de cet extrait.
+            for (final key in camera._chunks.keys.where((k) => k.startsWith('${message['id']}:')).toList()) {
+              camera._chunks.remove(key)!.complete(message);
+            }
+          }
       }
       if (!_disposed) notifyListeners();
     }
@@ -299,6 +325,77 @@ class ScreenController extends ChangeNotifier {
       notifyListeners();
     }
     await camera.link!.send({'type': 'reglages', 'reglages': next.toJson()});
+  }
+
+  // ── Extraits ──
+
+  /// Télécharge un extrait de la caméra, morceau par morceau (liaison chiffrée), puis le
+  /// range : galerie (Films/sCam) sur Android, dossier Vidéos\sCam ailleurs.
+  Future<void> download(String cameraId, CameraClip clip) async {
+    final camera = _links[cameraId];
+    final link = camera?.link;
+    if (camera == null || link == null || camera.downloads.containsKey(clip.id)) return;
+    camera.downloads[clip.id] = 0;
+    notifyListeners();
+    final temp = File('${Directory.systemTemp.path}${Platform.pathSeparator}scam-${clip.id}');
+    IOSink? sink;
+    try {
+      sink = temp.openWrite();
+      var offset = 0;
+      while (true) {
+        final waiting = Completer<Map<String, dynamic>>();
+        camera._chunks['${clip.id}:$offset'] = waiting;
+        await link.send({'type': 'morceau', 'id': clip.id, 'debut': offset});
+        final reply = await waiting.future.timeout(const Duration(seconds: 20));
+        final data = unb64Large(reply['donnees']);
+        final total = reply['taille'];
+        if (reply['erreur'] == true || data == null || total is! int) throw const LinkException('morceau refusé');
+        sink.add(data);
+        offset += data.length;
+        camera.downloads[clip.id] = total == 0 ? 1 : offset / total;
+        notifyListeners();
+        if (offset >= total || data.isEmpty) break;
+      }
+      await sink.close();
+      sink = null;
+      final where = await _storeClip(temp, clip.id);
+      if (where == null) throw const LinkException('rangement impossible');
+      camera.saved[clip.id] = where;
+      app.showNotice(app.isAndroid ? 'Extrait rangé dans la galerie (Films/sCam).' : 'Extrait rangé dans $where');
+    } on Object {
+      camera._chunks.removeWhere((key, _) => key.startsWith('${clip.id}:'));
+      app.showNotice('Le téléchargement de l\'extrait a échoué. Réessayez.', error: true);
+    } finally {
+      await sink?.close();
+      if (await temp.exists()) await temp.delete();
+      camera.downloads.remove(clip.id);
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  Future<String?> _storeClip(File temp, String name) async {
+    if (app.isAndroid) return bridge.saveVideo(temp.path, name);
+    final dir = await app.savedClipsDirectory();
+    await dir.create(recursive: true);
+    final target = File('${dir.path}${Platform.pathSeparator}$name');
+    await temp.copy(target.path);
+    return target.path;
+  }
+
+  /// Ouvre un extrait téléchargé avec le lecteur vidéo de l'appareil.
+  Future<void> openClip(String cameraId, String clipId) async {
+    final where = _links[cameraId]?.saved[clipId];
+    if (where == null) return;
+    if (app.isAndroid) {
+      await bridge.openVideo(where);
+    } else if (app.isWindows) {
+      await Process.run('explorer.exe', [where]);
+    }
+  }
+
+  /// Efface un extrait sur la caméra.
+  Future<void> deleteClip(String cameraId, String clipId) async {
+    await _links[cameraId]?.link?.send({'type': 'supprimerExtrait', 'id': clipId});
   }
 
   // ── Appairage ──

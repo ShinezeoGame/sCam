@@ -2,7 +2,7 @@
 
 <h1 align="center">sCam</h1>
 
-<p align="center"><b>Un téléphone Android devient caméra de surveillance ou babyphone, chez vous, sur votre Wi-Fi.</b></p>
+<p align="center"><b>Un téléphone Android (ou un PC) devient caméra de surveillance ou babyphone, chez vous, sur votre Wi-Fi.</b></p>
 
 <p align="center">
   <a href="https://github.com/ShinezeoGame/sCam/releases/latest/download/scam.apk"><img alt="Télécharger pour Android (APK)" src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-pour%20Android-F0A257?style=for-the-badge&logo=android&logoColor=white&labelColor=3B2516"></a>
@@ -46,6 +46,12 @@ mouvement dans l'image, et tous vos écrans reçoivent une alerte, même quand s
 arrière-plan sur le téléphone. Le seuil du bruit et la sensibilité au mouvement se règlent
 avec un niveau en direct sous les yeux ; une porte qui claque seule ne déclenche rien.
 
+### 🎞️ Extraits vidéo à chaque alerte
+Quand une alerte se déclenche, la caméra Android enregistre les 30 secondes qui suivent,
+image et son. Depuis votre écran, vous voyez la liste des extraits, vous les téléchargez
+(dans la galerie du téléphone, ou le dossier Vidéos du PC), vous les regardez et vous les
+effacez. Ils restent chez vous : sur la caméra, puis sur l'écran qui les télécharge.
+
 ### 🔦 Lampe, objectif et nuit
 Allumez la lampe du téléphone caméra à distance, passez de l'objectif arrière à l'objectif
 avant, et éclaircissez l'image sur votre écran quand la pièce est sombre.
@@ -58,6 +64,10 @@ température (et s'il chauffe).
 « Chambre de Léo », « Entrée » : appairez autant de caméras que vous voulez, et regardez-les
 depuis votre téléphone, une tablette ou le PC Windows.
 
+### 💻 Le PC peut aussi filmer
+Pas de téléphone libre ? La webcam et le micro d'un PC Windows font une caméra sCam, avec les
+mêmes alertes. Le PC ne se met pas en veille tant qu'il filme.
+
 ### 📺 Prêt pour sDash et Home Assistant
 Sur demande, la caméra peut aussi offrir un flux MJPEG local, protégé par mot de passe, que
 sDash ou Home Assistant savent afficher. Il est désactivé par défaut (voir la
@@ -68,9 +78,10 @@ Comme toute la famille sPack, sCam suit le thème de l'appareil, ou celui que vo
 
 ## Prise en main
 
-1. **Installez sCam** sur le téléphone qui servira de caméra (Android 7 ou plus récent) et
-   sur l'appareil qui regardera (téléphone Android ou PC Windows), connectés au même Wi-Fi.
-2. **Choisissez un rôle** : « Caméra » sur le téléphone posé dans la pièce (donnez-lui un
+1. **Installez sCam** sur l'appareil qui servira de caméra (téléphone Android 7 ou plus
+   récent, ou PC Windows avec webcam) et sur celui qui regardera (téléphone Android ou PC
+   Windows), connectés au même Wi-Fi.
+2. **Choisissez un rôle** : « Caméra » sur l'appareil posé dans la pièce (donnez-lui un
    nom), « Écran » sur l'autre.
 3. **Appairez-les** : sur la caméra, touchez « Appairer un écran » ; sur l'écran, « Ajouter
    une caméra ». Vérifiez que le même code à six chiffres s'affiche des deux côtés, et
@@ -93,7 +104,9 @@ récentes). Laissez le téléphone branché, et autorisez sCam à ignorer l'éco
 (bouton dans les réglages ; chez Samsung, « Batterie → Non restreinte »).
 
 **Le PC peut-il servir de caméra ?**
-Pas dans cette version : le rôle Caméra est sur Android, le PC Windows sert d'écran.
+Oui, avec sa webcam et son micro. Il n'a ni lampe, ni objectif avant et arrière, et il
+n'enregistre pas d'extraits (c'est réservé aux caméras Android). Laissez sCam ouvert : la
+fenêtre peut être réduite.
 
 **Et le flux MJPEG pour sDash ou Home Assistant ?**
 Activez-le dans les réglages de la caméra : sCam affiche l'adresse, l'utilisateur et le mot
@@ -101,7 +114,9 @@ de passe à recopier. Attention : ce flux-là n'est **pas chiffré** (seulement 
 de passe), et il ne transporte que l'image. C'est pourquoi il est désactivé par défaut.
 
 **sCam enregistre-t-il des vidéos ?**
-Non, pas dans cette version : il montre le direct et envoie des alertes.
+Seulement à chaque alerte, et si l'option est activée sur la caméra : les 30 secondes qui
+suivent l'alerte, gardées sur la caméra (les 30 derniers extraits). Le direct, lui, n'est
+jamais enregistré. Les secondes *avant* l'alerte ne sont pas dans l'extrait.
 
 ## La famille sPack
 

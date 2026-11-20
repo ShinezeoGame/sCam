@@ -48,6 +48,26 @@ class FakeCameraMedia implements CameraMedia {
 
   @override
   Widget preview() => const ColoredBox(color: Color(0xFF39424A));
+
+  @override
+  bool canRecord = true;
+
+  @override
+  bool get canSwitchLens => true;
+
+  String? recordingTo;
+
+  @override
+  Future<bool> startRecording(String path) async {
+    if (recordingTo != null) return false;
+    recordingTo = path;
+    // Un faux MP4 de 250 Ko : son téléchargement demande trois morceaux.
+    File(path).writeAsBytesSync([for (var i = 0; i < 250 * 1024; i++) i % 251]);
+    return true;
+  }
+
+  @override
+  Future<void> stopRecording() async => recordingTo = null;
 }
 
 class FakeCameraSession implements MediaSession {
@@ -112,19 +132,24 @@ Future<int> freePort() async {
 
 /// Une caméra et un écran réels (réseau compris) sur cette machine.
 class Pair {
-  Pair(this.camera, this.screen, this.cameraMedia, this.screenMedia);
+  Pair(this.camera, this.screen, this.cameraMedia, this.screenMedia, this.temp);
 
   final AppController camera;
   final AppController screen;
   final FakeCameraMedia cameraMedia;
   final FakeScreenMedia screenMedia;
 
+  /// Dossier temporaire : extraits de la caméra (`camera/`) et téléchargés (`ecran/`).
+  final Directory temp;
+
   static Future<Pair> start({Map<String, PairedDevice> cameraPaired = const {}}) async {
     AppController.debugCameraAllowed = true;
     final cameraPort = await freePort(), screenPort = await freePort(), jpegPort = await freePort();
     final loopback = InternetAddress.loopbackIPv4;
     final cameraMedia = FakeCameraMedia(), screenMedia = FakeScreenMedia();
+    final temp = await Directory.systemTemp.createTemp('scam-test');
     final camera = AppController(
+      clipsDirectory: () async => Directory('${temp.path}/camera'),
       store: MemoryStore(
         Settings(role: DeviceRole.camera, deviceId: 'cam', deviceName: 'Chambre de Léo', paired: cameraPaired),
       ),
@@ -132,6 +157,7 @@ class Pair {
       network: NetworkOptions(port: cameraPort, mjpegPort: jpegPort, discoveryTargets: [(loopback, screenPort)]),
     );
     final screen = AppController(
+      savedClipsDirectory: () async => Directory('${temp.path}/ecran'),
       store: MemoryStore(const Settings(role: DeviceRole.screen, deviceId: 'ecran', deviceName: 'Galaxy S25')),
       screenMedia: () => screenMedia,
       network: NetworkOptions(port: screenPort, discoveryTargets: [(loopback, cameraPort)]),
@@ -140,12 +166,13 @@ class Pair {
     await screen.loadSettings();
     await camera.start();
     await screen.start();
-    return Pair(camera, screen, cameraMedia, screenMedia);
+    return Pair(camera, screen, cameraMedia, screenMedia, temp);
   }
 
   Future<void> stop() async {
     await screen.dispose();
     await camera.dispose();
+    await temp.delete(recursive: true);
   }
 }
 

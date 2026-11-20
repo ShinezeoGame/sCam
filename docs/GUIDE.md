@@ -30,6 +30,15 @@ Tous les appareils doivent être sur le **même Wi-Fi**.
 
 Ne fermez pas sCam depuis la liste des applications récentes : la caméra s'arrêterait.
 
+### Avec un PC Windows
+
+Le PC peut aussi servir de caméra, avec sa webcam et son micro : choisissez **Caméra** au
+premier lancement (ou dans les réglages), et autorisez sCam sur les réseaux privés quand le
+pare-feu le demande (sinon les écrans ne le joignent pas). Laissez sCam ouvert, la fenêtre
+peut être réduite : le PC ne se met pas en veille tant qu'il filme, mais l'écran peut
+s'éteindre. Sous Windows, la caméra n'a ni lampe, ni choix d'objectif, et n'enregistre pas
+d'extraits ; le niveau sonore et le mouvement y sont mesurés une fois par seconde environ.
+
 ## Appairer un écran
 
 1. Sur la caméra, touchez **Appairer un écran** : l'appairage reste ouvert trois minutes.
@@ -68,6 +77,23 @@ genre. Les alertes arrivent sur **tous** les écrans appairés : en notification
 (même en arrière-plan, si « Alertes en arrière-plan » est activé), et en faisant clignoter la
 fenêtre sur Windows (laissez sCam ouvert, même réduit).
 
+## Les extraits vidéo
+
+Avec **Extraits vidéo** activé (réglages de la caméra, activé par défaut), une caméra
+Android enregistre à chaque alerte les **30 secondes qui suivent**, image et son. Une
+alerte qui arrive pendant un enregistrement ne lance pas d'extrait de plus. La caméra garde
+les 30 derniers extraits ; au-delà, les plus anciens sont effacés.
+
+Sur l'écran, la page de la caméra montre la section **Extraits** :
+
+- ⬇ **Télécharger** : l'extrait voyage par la liaison chiffrée, puis il est rangé dans la
+  galerie du téléphone (Films/sCam) ou, sur le PC, dans le dossier Vidéos\sCam ;
+- ▶ **Ouvrir** : une fois téléchargé, il s'ouvre avec le lecteur vidéo de l'appareil ;
+- 🗑 **Effacer** : l'extrait est effacé de la caméra (une copie téléchargée reste).
+
+Sur la caméra elle-même, la section **Extraits** permet aussi de les effacer, un par un ou
+tous.
+
 ## sDash et Home Assistant
 
 Sur la caméra, **Réglages → Flux MJPEG local** : sCam affiche l'adresse du flux
@@ -100,4 +126,5 @@ deux fois par seconde. Laissez-le désactivé si vous ne vous en servez pas.
   (AES-256-GCM). L'image et le son passent par WebRTC, chiffré lui aussi (DTLS-SRTP).
 - Un appareil non appairé ne reçoit ni image, ni son, ni même l'état de la caméra.
 - Seul le flux MJPEG facultatif n'est pas chiffré (voir plus haut).
-- Rien n'est enregistré : sCam montre le direct, sans garder de vidéo.
+- Le direct n'est jamais enregistré. Seuls les extraits d'alerte le sont (si l'option est
+  activée), sur la caméra elle-même, puis sur l'écran qui les télécharge.

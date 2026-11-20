@@ -168,10 +168,34 @@ class _LivePageState extends State<LivePage> {
           CameraSettingsPanel(
             settings: status.settings,
             hasTorch: status.hasTorch,
+            canSwitchLens: status.canSwitchLens,
+            canRecord: status.canRecord,
             sound: status.running ? status.sound : null,
             motion: status.running ? status.motion : null,
             onChanged: (next) => screen.configure(camera.device.id, next),
           ),
+        ],
+        if (online && (camera.clips.isNotEmpty || (status?.recording ?? false))) ...[
+          SectionTitle('Extraits', detail: status?.recording ?? false ? 'enregistrement en cours' : null),
+          if (camera.clips.isEmpty)
+            Tile(child: Text('Le premier extrait sera prêt dans quelques secondes.', style: t.secondary))
+          else
+            Tile(
+              child: Column(
+                children: [
+                  for (final clip in camera.clips)
+                    ClipRow(
+                      clip: clip,
+                      progress: camera.downloads[clip.id],
+                      onDownload: () => screen.download(camera.device.id, clip),
+                      onOpen: camera.saved.containsKey(clip.id) && (app.isAndroid || app.isWindows)
+                          ? () => screen.openClip(camera.device.id, clip.id)
+                          : null,
+                      onDelete: () => screen.deleteClip(camera.device.id, clip.id),
+                    ),
+                ],
+              ),
+            ),
         ],
         const SizedBox(height: Dim.sectionGap),
         AppButton(

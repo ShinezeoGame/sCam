@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import '../core/motion.dart';
 import '../data/net/protocol.dart';
 import '../data/system_bridge.dart';
 import '../models/camera.dart';
@@ -80,7 +82,7 @@ class WebRtcCameraMedia implements CameraMedia {
       ],
     },
     'video': {
-      'facingMode': s.lens == Lens.front ? 'user' : 'environment',
+      if (_native) 'facingMode': s.lens == Lens.front ? 'user' : 'environment',
       'width': s.quality.width,
       'height': s.quality.height,
       'frameRate': 20,
@@ -142,6 +144,9 @@ class WebRtcCameraMedia implements CameraMedia {
 
   @override
   Future<void> stop() async {
+    await stopRecording();
+    _grid = null;
+    _jpeg = null;
     for (final session in _sessions.toList()) {
       await session.close();
     }
@@ -226,15 +231,117 @@ class WebRtcCameraMedia implements CameraMedia {
     return session;
   }
 
-  @override
-  Future<Measures> measure() async {
-    final raw = await bridge.measure();
-    if (raw == null) return const Measures();
-    return Measures(sound: soundLevelFromDb(raw.soundDb), motion: raw.motion);
+  // ── Mesures ──
+  // Sur Android, le code natif (`CameraAnalyzer.kt`) lit directement les images et le son.
+  // Ailleurs (webcam du PC), le niveau sonore vient des statistiques WebRTC de la liaison
+  // interne, et le mouvement d'une image capturée chaque seconde, analysée dans un isolat.
+
+  static bool get _native => Platform.isAndroid;
+
+  Future<void> _capturing = Future.value();
+  Uint8List? _grid;
+  int _measures = 0;
+  DateTime _jpegAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Uint8List? _jpeg;
+
+  /// Capture une image de la webcam (PNG), une seule à la fois.
+  Future<Uint8List?> _capture() {
+    final video = _stream?.getVideoTracks().firstOrNull;
+    if (video == null) return Future.value();
+    final done = _capturing.then((_) async {
+      try {
+        return (await video.captureFrame()).asUint8List();
+      } on Object {
+        return null;
+      }
+    });
+    _capturing = done.then((_) {});
+    return done;
+  }
+
+  Future<double> _soundFromStats() async {
+    final pc = _loopSend;
+    if (pc == null) return 0;
+    try {
+      for (final report in await pc.getStats()) {
+        final level = report.values['audioLevel'];
+        if (report.type == 'media-source' && level is num) {
+          return level <= 0 ? 0 : soundLevelFromDb(20 * log(level.toDouble()) / ln10);
+        }
+      }
+    } on Object {
+      // Statistiques indisponibles.
+    }
+    return 0;
   }
 
   @override
-  Future<Uint8List?> snapshot() => bridge.latestJpeg();
+  Future<Measures> measure() async {
+    if (_native) {
+      final raw = await bridge.measure();
+      if (raw == null) return const Measures();
+      return Measures(sound: soundLevelFromDb(raw.soundDb), motion: raw.motion);
+    }
+    final sound = await _soundFromStats();
+    var motion = 0.0;
+    // Une image par seconde suffit (la mesure est demandée toutes les demi-secondes).
+    _measures++;
+    if (_measures.isOdd) {
+      final png = await _capture();
+      final grid = png == null ? null : await compute(luminanceGrid, png);
+      final previous = _grid;
+      if (grid != null) {
+        _grid = grid;
+        if (previous != null) motion = motionBetween(previous, grid);
+      }
+    }
+    return Measures(sound: sound, motion: motion);
+  }
+
+  @override
+  Future<Uint8List?> snapshot() async {
+    if (_native) return bridge.latestJpeg();
+    if (DateTime.now().difference(_jpegAt) < const Duration(milliseconds: 450)) return _jpeg;
+    _jpegAt = DateTime.now();
+    final png = await _capture();
+    if (png != null) _jpeg = await compute(toJpeg, png) ?? _jpeg;
+    return _jpeg;
+  }
+
+  // ── Extraits ──
+
+  MediaRecorder? _recorder;
+
+  @override
+  bool get canRecord => _native;
+
+  @override
+  bool get canSwitchLens => _native;
+
+  @override
+  Future<bool> startRecording(String path) async {
+    final video = _stream?.getVideoTracks().firstOrNull;
+    if (!canRecord || video == null || _recorder != null) return false;
+    final recorder = MediaRecorder();
+    try {
+      await recorder.start(path, videoTrack: video, audioChannel: RecorderAudioChannel.INPUT);
+      _recorder = recorder;
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> stopRecording() async {
+    final recorder = _recorder;
+    _recorder = null;
+    try {
+      await recorder?.stop();
+    } on Object {
+      // Fichier peut-être incomplet : il sera écarté s'il est vide.
+    }
+  }
 
   @override
   Widget preview() => _previewReady

@@ -71,9 +71,9 @@ class RolePage extends StatelessWidget {
         _RoleTile(
           icon: Icons.videocam_rounded,
           title: 'Caméra',
-          text: controller.canBeCamera
-              ? 'Ce téléphone, posé et branché, filme et écoute la pièce. Il continue écran éteint.'
-              : 'Disponible sur Android seulement : installez sCam sur un téléphone ou une tablette.',
+          text: controller.isWindows
+              ? 'La webcam et le micro de ce PC filment et écoutent la pièce.'
+              : 'Ce téléphone, posé et branché, filme et écoute la pièce. Il continue écran éteint.',
           onTap: controller.canBeCamera
               ? () async {
                   final name = await askCameraName(context);

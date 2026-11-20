@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../data/net/discovery.dart';
 import '../data/net/protocol.dart';
@@ -36,7 +37,27 @@ class AppController extends ChangeNotifier {
     this.cameraMedia,
     this.screenMedia,
     this.network = const NetworkOptions(),
-  }) : _store = store ?? DiskStore();
+    Future<Directory> Function()? clipsDirectory,
+    Future<Directory> Function()? savedClipsDirectory,
+  }) : _store = store ?? DiskStore(),
+       clipsDirectory = clipsDirectory ?? _defaultClips,
+       savedClipsDirectory = savedClipsDirectory ?? _defaultSavedClips;
+
+  /// Dossier des extraits enregistrés par la caméra (espace privé de l'application).
+  final Future<Directory> Function() clipsDirectory;
+
+  /// Dossier où un écran (hors Android) range les extraits téléchargés : Vidéos\sCam.
+  /// Sur Android, ils vont dans la galerie (Films/sCam) par le code natif.
+  final Future<Directory> Function() savedClipsDirectory;
+
+  static Future<Directory> _defaultClips() async =>
+      Directory('${(await getApplicationSupportDirectory()).path}${Platform.pathSeparator}extraits');
+
+  static Future<Directory> _defaultSavedClips() async {
+    final home = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
+    if (home != null) return Directory('$home${Platform.pathSeparator}Videos${Platform.pathSeparator}sCam');
+    return Directory('${(await getApplicationDocumentsDirectory()).path}${Platform.pathSeparator}sCam');
+  }
 
   final SettingsStore _store;
   final SystemBridge bridge;
@@ -59,8 +80,10 @@ class AppController extends ChangeNotifier {
 
   bool get isAndroid => !kIsWeb && Platform.isAndroid;
 
-  /// Le rôle Caméra n'existe que sur Android (service au premier plan, lampe, détection).
-  bool get canBeCamera => isAndroid || debugCameraAllowed;
+  bool get isWindows => !kIsWeb && Platform.isWindows;
+
+  /// Le rôle Caméra existe sur Android (téléphone) et sous Windows (webcam du PC).
+  bool get canBeCamera => isAndroid || isWindows || debugCameraAllowed;
 
   @visibleForTesting
   static bool debugCameraAllowed = false;

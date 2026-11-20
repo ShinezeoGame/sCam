@@ -2,15 +2,17 @@
 
 - **Toujours communiquer avec l'utilisateur en français.** L'interface, les commentaires
   et les messages de commit sont aussi en français.
-- Application Flutter pour **Android et Windows** (même code) : un téléphone Android devient
-  caméra de surveillance ou babyphone (rôle **Caméra**, Android seulement), regardé depuis
+- Application Flutter pour **Android et Windows** (même code) : un téléphone Android (ou la
+  webcam d'un PC Windows) devient caméra de surveillance ou babyphone (rôle **Caméra**),
+  regardé depuis
   d'autres appareils sur le Wi-Fi de la maison (rôle **Écran** : le Samsung Galaxy S25 de
   l'utilisateur, la tablette de sDash, le PC Windows). L'utilisateur n'a pas de vieux
   téléphone pour l'instant : n'importe quel Android 7+ peut servir de caméra.
 - Architecture :
   - `lib/core/` : `crypto.dart` (appairage X25519 avec engagement, code à 6 chiffres,
     preuves HMAC, `SessionCipher` AES-256-GCM avec compteur par sens), `detection.dart`
-    (décision des alertes bruit et mouvement).
+    (décision des alertes bruit et mouvement), `motion.dart` (mouvement mesuré en Dart pour
+    la webcam du PC : grille 64 × 48, médiane des écarts, comme `CameraAnalyzer.kt`).
   - `lib/data/net/` : `protocol.dart` (ports 47880 et 47881, annonces, `MessageLink` : JSON
     préfixés de leur longueur, chiffrés à partir d'un point précis de l'échange,
     `isLocalAddress`, `isLocalCandidate`), `discovery.dart` (UDP, reprise de sDrop),
@@ -19,12 +21,19 @@
     tests), `webrtc_media.dart` (implémentation `flutter_webrtc`).
   - `lib/state/` : `app_controller.dart` (réglages, rôle, messages), `camera_controller.dart`
     (serveur, appairage, écrans connectés, mesures, alertes, MJPEG),
-    `screen_controller.dart` (liaisons permanentes aux caméras, alertes, regarder, appairer).
+    `screen_controller.dart` (liaisons permanentes aux caméras, alertes, regarder, appairer,
+    télécharger les extraits).
+  - Extraits : 30 s après chaque alerte, caméra Android seulement (`MediaRecorder` de
+    `flutter_webrtc`), 30 gardés dans `getApplicationSupportDirectory()/extraits`, noms
+    `AAAAMMJJ-HHMMSS-bruit|mouvement.mp4` (`CameraClip`). La caméra ne sert que les fichiers
+    de sa liste. Rangement côté écran : galerie Films/sCam (Android, `rangerVideo`) ou
+    Vidéos\sCam (Windows).
   - `lib/data/system_bridge.dart` ↔ `android/.../MainActivity.kt` (canal `scam/systeme`) :
     autorisations, `ScamService.kt` (service au premier plan), batterie et température,
     `CameraAnalyzer.kt` (niveau sonore, mouvement, JPEG), notifications d'alerte, économie
-    de batterie. Sous Windows, `flutter_window.cpp` ne gère que `alerte` (fenêtre qui
-    clignote) ; le reste renvoie des valeurs neutres.
+    de batterie, rangement et ouverture des vidéos. Sous Windows, `flutter_window.cpp` gère
+    `alerte` (fenêtre qui clignote), `serviceDemarrer`/`serviceArreter` (veille empêchée
+    quand la webcam filme) et `batterie` (portable) ; le reste renvoie des valeurs neutres.
 - Règles de sécurité à ne pas affaiblir : réseau local uniquement (connexions et candidats
   WebRTC non locaux refusés, aucun serveur STUN/TURN) ; rien n'est transmis à un appareil
   non appairé ; l'appairage n'est accepté que pendant qu'il est ouvert sur la caméra et
@@ -60,7 +69,8 @@
   Android (Kotlin, service, analyse, WebRTC réel) n'est vérifiée que par la compilation de
   la CI. Points à surveiller lors des premiers essais : liaison WebRTC interne qui garde le
   micro ouvert, rotation des JPEG, son sur haut-parleur côté écran Android, service au
-  premier plan sur Android 14+, économie de batterie Samsung.
+  premier plan sur Android 14+, économie de batterie Samsung, extraits MP4 (orientation,
+  son), caméra Windows (`captureFrame` et statistiques `audioLevel` jamais essayés).
 - Logo : sCam fait partie de la marque « s » de sPack. Règles : même carré arrondi orange
   `#C2571A`, même trait clair à bouts ronds, le dessin de chaque application est **centré**
   dans le carré, et **le point ambre est posé ensuite dans l'angle en haut à droite**,

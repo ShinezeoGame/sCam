@@ -189,6 +189,8 @@ class CameraSettingsPanel extends StatelessWidget {
     required this.settings,
     required this.onChanged,
     required this.hasTorch,
+    this.canSwitchLens = true,
+    this.canRecord = false,
     this.sound,
     this.motion,
   });
@@ -196,6 +198,12 @@ class CameraSettingsPanel extends StatelessWidget {
   final CameraSettings settings;
   final ValueChanged<CameraSettings> onChanged;
   final bool hasTorch;
+
+  /// Objectifs avant et arrière (téléphone) ; une webcam n'en a qu'un.
+  final bool canSwitchLens;
+
+  /// La caméra sait enregistrer des extraits (Android).
+  final bool canRecord;
 
   /// Niveaux actuels, pour régler les seuils en connaissance de cause.
   final double? sound;
@@ -211,18 +219,21 @@ class CameraSettingsPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SettingBlock(
-                title: 'Objectif',
-                child: Segmented<Lens>(
-                  values: Lens.values,
-                  selected: settings.lens,
-                  labelOf: (l) => l.label,
-                  onSelected: (l) => onChanged(settings.copyWith(lens: l)),
+              if (canSwitchLens)
+                SettingBlock(
+                  title: 'Objectif',
+                  child: Segmented<Lens>(
+                    values: Lens.values,
+                    selected: settings.lens,
+                    labelOf: (l) => l.label,
+                    onSelected: (l) => onChanged(settings.copyWith(lens: l)),
+                  ),
                 ),
-              ),
               SettingRow(
                 title: 'Lampe',
-                subtitle: hasTorch ? 'Éclaire la pièce pour filmer dans le noir.' : 'Pas de lampe de ce côté.',
+                subtitle: hasTorch
+                    ? 'Éclaire la pièce pour filmer dans le noir.'
+                    : (canSwitchLens ? 'Pas de lampe de ce côté.' : 'Pas de lampe sur cette caméra.'),
                 trailing: AppSwitch(
                   label: 'Lampe',
                   value: settings.torch && hasTorch,
@@ -301,6 +312,17 @@ class CameraSettingsPanel extends StatelessWidget {
                   const SizedBox(height: 10),
                 ],
               ],
+              SettingRow(
+                title: 'Extraits vidéo',
+                subtitle: canRecord
+                    ? 'À chaque alerte, la caméra enregistre les 30 secondes qui suivent (30 extraits gardés).'
+                    : 'Cette caméra ne sait pas enregistrer d\'extraits (Android seulement).',
+                trailing: AppSwitch(
+                  label: 'Extraits vidéo',
+                  value: settings.recordClips && canRecord,
+                  onChanged: canRecord ? (v) => onChanged(settings.copyWith(recordClips: v)) : (_) {},
+                ),
+              ),
             ],
           ),
         ),
@@ -385,6 +407,90 @@ class VideoFrame extends StatelessWidget {
           color: c.surfaceMuted,
           child: Stack(fit: StackFit.expand, children: [child, ?overlay]),
         ),
+      ),
+    );
+  }
+}
+
+/// Taille lisible : « 840 Ko », « 6,2 Mo ».
+String formatBytes(int bytes) {
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).ceil()} Ko';
+  final mo = bytes / (1024 * 1024);
+  return '${mo < 10 ? mo.toStringAsFixed(1).replaceAll('.', ',') : mo.round()} Mo';
+}
+
+/// Jour et heure courts : « 20/11 22:41 ».
+String shortDate(DateTime at) =>
+    '${at.day.toString().padLeft(2, '0')}/${at.month.toString().padLeft(2, '0')} ${shortTime(at)}';
+
+/// Un extrait dans une liste : genre, date, taille, et ses actions.
+class ClipRow extends StatelessWidget {
+  const ClipRow({super.key, required this.clip, required this.onDelete, this.progress, this.onDownload, this.onOpen});
+
+  final CameraClip clip;
+  final VoidCallback onDelete;
+
+  /// Avancement du téléchargement en cours (0 à 1), s'il y en a un.
+  final double? progress;
+  final VoidCallback? onDownload;
+
+  /// Extrait déjà téléchargé : l'ouvrir.
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = context.text;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            clip.kind == AlertKind.noise ? Icons.graphic_eq_rounded : Icons.directions_run_rounded,
+            size: 20,
+            color: c.accent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${clip.kind.label} · ${shortDate(clip.at)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.body,
+                ),
+                if (progress != null) ...[
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 6,
+                    backgroundColor: c.surfaceMuted,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ] else
+                  Text(formatBytes(clip.bytes), style: t.caption),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (onOpen != null)
+            SquareButton(icon: Icons.play_arrow_rounded, tooltip: 'Ouvrir l\'extrait', onPressed: onOpen)
+          else if (onDownload != null)
+            SquareButton(
+              icon: Icons.download_rounded,
+              tooltip: 'Télécharger l\'extrait',
+              busy: progress != null,
+              onPressed: onDownload,
+            ),
+          const SizedBox(width: 6),
+          SquareButton(
+            icon: Icons.delete_outline_rounded,
+            tooltip: 'Effacer l\'extrait de la caméra',
+            onPressed: progress == null ? onDelete : null,
+          ),
+        ],
       ),
     );
   }

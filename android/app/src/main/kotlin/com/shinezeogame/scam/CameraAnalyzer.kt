@@ -27,8 +27,8 @@ import kotlin.math.sqrt
  *
  * - niveau sonore (décibels pleine échelle, le plus fort depuis la dernière lecture) ;
  * - mouvement : part de l'image qui a changé, sur une grille réduite de 64 × 48 points,
- *   en retirant le changement global de luminosité (une lampe qu'on allume n'est pas un
- *   mouvement) ;
+ *   en retirant le changement global de luminosité, médiane des écarts (une lampe qu'on
+ *   allume n'est pas un mouvement) ;
  * - dernière image en JPEG, préparée seulement quand le flux MJPEG la demande.
  *
  * Les pistes viennent de flutter_webrtc (`FlutterWebRTCPlugin.sharedSingleton`).
@@ -175,13 +175,13 @@ class CameraAnalyzer {
         val previous = previousGrid
         previousGrid = grid
         if (previous == null) return
-        // Changement moyen de luminosité, retiré de chaque point.
-        var shift = 0L
-        for (i in grid.indices) shift += grid[i] - previous[i]
-        val mean = shift.toDouble() / grid.size
+        // Changement global de luminosité : la médiane des écarts (un grand objet qui bouge
+        // ne la fausse pas, contrairement à la moyenne). Même calcul que lib/core/motion.dart.
+        val diffs = IntArray(grid.size) { grid[it] - previous[it] }
+        val median = diffs.sortedArray()[diffs.size / 2]
         var changed = 0
-        for (i in grid.indices) {
-            if (abs(grid[i] - previous[i] - mean) > PIXEL_THRESHOLD) changed++
+        for (d in diffs) {
+            if (abs(d - median) > PIXEL_THRESHOLD) changed++
         }
         motion = max(motion, changed.toDouble() / grid.size)
     }

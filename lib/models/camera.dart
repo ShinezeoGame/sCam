@@ -47,6 +47,7 @@ class CameraSettings {
     this.noiseThreshold = 0.55,
     this.motionAlert = false,
     this.motionSensitivity = 0.5,
+    this.recordClips = true,
   });
 
   final Lens lens;
@@ -65,6 +66,9 @@ class CameraSettings {
   /// 0 : seuls les grands mouvements alertent ; 1 : le moindre changement.
   final double motionSensitivity;
 
+  /// Enregistrer un extrait (les 30 secondes qui suivent) à chaque alerte, sur la caméra.
+  final bool recordClips;
+
   CameraSettings copyWith({
     Lens? lens,
     Quality? quality,
@@ -73,6 +77,7 @@ class CameraSettings {
     double? noiseThreshold,
     bool? motionAlert,
     double? motionSensitivity,
+    bool? recordClips,
   }) => CameraSettings(
     lens: lens ?? this.lens,
     quality: quality ?? this.quality,
@@ -81,6 +86,7 @@ class CameraSettings {
     noiseThreshold: noiseThreshold ?? this.noiseThreshold,
     motionAlert: motionAlert ?? this.motionAlert,
     motionSensitivity: motionSensitivity ?? this.motionSensitivity,
+    recordClips: recordClips ?? this.recordClips,
   );
 
   Map<String, dynamic> toJson() => {
@@ -91,6 +97,7 @@ class CameraSettings {
     'seuilBruit': noiseThreshold,
     'alerteMouvement': motionAlert,
     'sensibiliteMouvement': motionSensitivity,
+    'extraits': recordClips,
   };
 
   static CameraSettings fromJson(Object? json, [CameraSettings base = const CameraSettings()]) {
@@ -103,6 +110,7 @@ class CameraSettings {
       noiseThreshold: _unit(json['seuilBruit'], base.noiseThreshold),
       motionAlert: json['alerteMouvement'] is bool ? json['alerteMouvement'] as bool : base.motionAlert,
       motionSensitivity: _unit(json['sensibiliteMouvement'], base.motionSensitivity),
+      recordClips: json['extraits'] is bool ? json['extraits'] as bool : base.recordClips,
     );
   }
 
@@ -115,7 +123,8 @@ class CameraSettings {
       other.noiseAlert == noiseAlert &&
       other.noiseThreshold == noiseThreshold &&
       other.motionAlert == motionAlert &&
-      other.motionSensitivity == motionSensitivity;
+      other.motionSensitivity == motionSensitivity &&
+      other.recordClips == recordClips;
 
   @override
   int get hashCode => Object.hash(lens, quality, torch, noiseAlert, noiseThreshold, motionAlert, motionSensitivity);
@@ -134,6 +143,9 @@ class CameraStatus {
     this.motion = 0,
     this.viewers = 0,
     this.hasTorch = false,
+    this.canSwitchLens = true,
+    this.canRecord = false,
+    this.recording = false,
     this.settings = const CameraSettings(),
   });
 
@@ -162,6 +174,15 @@ class CameraStatus {
   final int viewers;
 
   final bool hasTorch;
+
+  /// Objectif avant et arrière (téléphone) ; faux pour une webcam.
+  final bool canSwitchLens;
+
+  /// La caméra sait enregistrer des extraits (Android).
+  final bool canRecord;
+
+  /// Un extrait est en cours d'enregistrement.
+  final bool recording;
   final CameraSettings settings;
 
   Map<String, dynamic> toJson() => {
@@ -175,6 +196,9 @@ class CameraStatus {
     'mouvement': motion,
     'spectateurs': viewers,
     'aLampe': hasTorch,
+    'objectifs': canSwitchLens,
+    'enregistre': canRecord,
+    'enregistrement': recording,
     'reglages': settings.toJson(),
   };
 
@@ -192,6 +216,9 @@ class CameraStatus {
       motion: _unit(json['mouvement'], 0),
       viewers: viewers is int ? viewers : 0,
       hasTorch: json['aLampe'] == true,
+      canSwitchLens: json['objectifs'] != false,
+      canRecord: json['enregistre'] == true,
+      recording: json['enregistrement'] == true,
       settings: CameraSettings.fromJson(json['reglages']),
     );
   }
@@ -205,6 +232,49 @@ class CameraAlert {
   final String cameraName;
   final AlertKind kind;
   final DateTime at;
+}
+
+/// Un extrait enregistré sur la caméra après une alerte.
+class CameraClip {
+  const CameraClip({required this.id, required this.at, required this.kind, required this.bytes});
+
+  /// Nom du fichier sur la caméra (« 20261120-224105-bruit.mp4 »).
+  final String id;
+  final DateTime at;
+  final AlertKind kind;
+  final int bytes;
+
+  static final _name = RegExp(r'^(\d{8})-(\d{6})-(bruit|mouvement)\.mp4$');
+
+  /// Lit le nom d'un fichier d'extrait ; `null` s'il n'en est pas un.
+  static CameraClip? fromFile(String name, int bytes) {
+    final m = _name.firstMatch(name);
+    if (m == null) return null;
+    final d = m.group(1)!, t = m.group(2)!;
+    final at = DateTime(
+      int.parse(d.substring(0, 4)),
+      int.parse(d.substring(4, 6)),
+      int.parse(d.substring(6, 8)),
+      int.parse(t.substring(0, 2)),
+      int.parse(t.substring(2, 4)),
+      int.parse(t.substring(4, 6)),
+    );
+    return CameraClip(id: name, at: at, kind: m.group(3) == 'bruit' ? AlertKind.noise : AlertKind.motion, bytes: bytes);
+  }
+
+  /// Nom de fichier d'un nouvel extrait.
+  static String fileName(DateTime at, AlertKind kind) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${at.year}${two(at.month)}${two(at.day)}-${two(at.hour)}${two(at.minute)}${two(at.second)}-'
+        '${kind == AlertKind.noise ? 'bruit' : 'mouvement'}.mp4';
+  }
+
+  Map<String, dynamic> toJson() => {'id': id, 'taille': bytes};
+
+  static CameraClip? fromJson(Object? json) {
+    if (json is! Map || json['id'] is! String || json['taille'] is! int) return null;
+    return fromFile(json['id'] as String, json['taille'] as int);
+  }
 }
 
 /// Convertit un niveau en décibels pleine échelle (−90 à 0) en niveau de 0 à 1 :

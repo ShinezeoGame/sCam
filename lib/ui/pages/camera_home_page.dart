@@ -92,10 +92,36 @@ class _CameraHomePageState extends State<CameraHomePage> {
         CameraSettingsPanel(
           settings: camera.cameraSettings,
           hasTorch: camera.media.hasTorch,
+          canSwitchLens: camera.media.canSwitchLens,
+          canRecord: camera.media.canRecord,
           sound: camera.running ? camera.measures.sound : null,
           motion: camera.running ? camera.measures.motion : null,
           onChanged: camera.updateCameraSettings,
         ),
+        if (camera.clips.isNotEmpty || camera.recording) ...[
+          SectionTitle(
+            'Extraits',
+            detail: camera.recording
+                ? 'enregistrement en cours'
+                : '${camera.clips.length} · ${formatBytes(camera.clipsBytes)}',
+          ),
+          if (camera.clips.isNotEmpty)
+            Tile(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final clip in camera.clips.take(10))
+                    ClipRow(clip: clip, onDelete: () => camera.deleteClip(clip.id)),
+                  const SizedBox(height: 6),
+                  AppButton(
+                    label: 'Tout effacer',
+                    icon: Icons.delete_sweep_rounded,
+                    onPressed: () => _confirmDeleteAll(context, camera),
+                  ),
+                ],
+              ),
+            ),
+        ],
         if (camera.alerts.isNotEmpty) ...[
           const SectionTitle('Alertes envoyées'),
           Tile(
@@ -106,11 +132,33 @@ class _CameraHomePageState extends State<CameraHomePage> {
         ],
         const SizedBox(height: Dim.sectionGap),
         Text(
-          'Vous pouvez éteindre l\'écran : sCam continue de filmer et d\'écouter. Laissez le téléphone branché.',
+          app.isWindows
+              ? 'Laissez sCam ouvert (la fenêtre peut être réduite) : le PC ne se met pas en veille tant qu\'il filme.'
+              : 'Vous pouvez éteindre l\'écran : sCam continue de filmer et d\'écouter. Laissez le téléphone branché.',
           style: t.caption,
         ),
       ],
     );
+  }
+
+  Future<void> _confirmDeleteAll(BuildContext context, CameraController camera) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Effacer tous les extraits ?'),
+        content: const Text('Ils seront effacés de cette caméra. Ceux déjà téléchargés sur un écran restent.'),
+        actions: [
+          AppButton(label: 'Annuler', compact: true, onPressed: () => Navigator.of(context).pop(false)),
+          AppButton(
+            label: 'Effacer',
+            compact: true,
+            kind: ButtonKind.primary,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await camera.deleteAllClips();
   }
 
   Future<void> _confirmForget(BuildContext context, CameraController camera, String id, String name) async {

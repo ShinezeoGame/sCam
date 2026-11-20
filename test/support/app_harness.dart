@@ -72,7 +72,10 @@ Future<(AppController, FakeCameraMedia, FakeScreenMedia)> pumpApp(
   late AppController controller;
   await tester.runAsync(() async {
     final port = await freePort(), jpeg = await freePort();
+    final temp = await Directory.systemTemp.createTemp('scam-ui');
     controller = AppController(
+      clipsDirectory: () async => Directory('${temp.path}/camera'),
+      savedClipsDirectory: () async => Directory('${temp.path}/ecran'),
       store: MemoryStore(
         Settings(
           deviceId: 'moi',

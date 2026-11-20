@@ -31,7 +31,7 @@ class FlutterWindow : public Win32Window {
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
 
-  // Canal « scam/systeme » : alertes (la fenêtre clignote dans la barre des tâches).
+  // Canal « scam/systeme » : alertes, veille, batterie.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> system_channel_;
 };
 

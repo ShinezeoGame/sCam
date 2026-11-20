@@ -237,3 +237,13 @@ bool isLocalCandidate(String candidate) {
   final parsed = InternetAddress.tryParse(address);
   return parsed != null && isLocalAddress(parsed);
 }
+
+/// Comme [unb64], pour un morceau d'extrait (jusqu'à la taille d'un message).
+List<int>? unb64Large(Object? value) {
+  if (value is! String || value.length > Limits.frameBytes) return null;
+  try {
+    return base64Decode(value);
+  } on FormatException {
+    return null;
+  }
+}

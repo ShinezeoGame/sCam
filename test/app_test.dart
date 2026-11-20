@@ -82,7 +82,11 @@ void main() {
           await tester.pump();
           await reveal(tester, find.textContaining('Appairage ouvert'));
           camera.debugRaise(AlertKind.noise);
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+          await tester.runAsync(camera.finishRecording);
           await tester.pump();
+          expect(camera.clips, hasLength(1));
+          await reveal(tester, find.text('Tout effacer'));
           await scrollThrough(tester);
 
           // Réglages modifiés depuis la caméra elle-même.
@@ -110,12 +114,28 @@ void main() {
           expect(tester.takeException(), isNull);
           await scrollThrough(tester);
 
+          screen.camera('leo')!.clips = [
+            CameraClip(
+              id: '20261120-224105-bruit.mp4',
+              at: DateTime(2026, 11, 20, 22, 41, 5),
+              kind: AlertKind.noise,
+              bytes: 6500000,
+            ),
+            CameraClip(
+              id: '20261120-031210-mouvement.mp4',
+              at: DateTime(2026, 11, 20, 3, 12, 10),
+              kind: AlertKind.motion,
+              bytes: 820000,
+            ),
+          ];
+          screen.camera('leo')!.downloads['20261120-031210-mouvement.mp4'] = 0.4;
           await push(tester, const LivePage(cameraId: 'leo'));
           expect(find.text('Écouter en arrière-plan'), findsOneWidget);
           expect(find.text('Éclaircir'), findsOneWidget);
           await tester.tap(find.text('Éclaircir'));
           await tester.pump();
           expect(screen.camera('leo')!.brighten, isTrue);
+          await reveal(tester, find.textContaining('Bruit · 20/11 22:41'));
           await scrollThrough(tester);
 
           await push(tester, const PairPage());

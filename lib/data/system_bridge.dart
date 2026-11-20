@@ -117,6 +117,12 @@ class SystemBridge {
   /// Ouvre la demande du système pour retirer sCam de l'économie de batterie.
   Future<void> requestBatteryUnrestricted() => _call<void>('demanderSansRestrictionBatterie');
 
+  /// Android : copie une vidéo dans la galerie (Films/sCam) ; renvoie son adresse.
+  Future<String?> saveVideo(String path, String name) => _call<String>('rangerVideo', {'chemin': path, 'nom': name});
+
+  /// Android : ouvre une vidéo de la galerie avec le lecteur du téléphone.
+  Future<void> openVideo(String uri) => _call<void>('ouvrirVideo', uri);
+
   /// Garde l'écran allumé tant que l'application est au premier plan.
   Future<void> keepScreenOn(bool on) => _call<void>('ecranAllume', on);
 }

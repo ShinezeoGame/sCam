@@ -73,6 +73,14 @@ class CameraController extends ChangeNotifier {
   bool get mjpegRunning => _mjpeg?.boundPort != null;
 
   Future<void> start() async {
+    try {
+      final dir = await app.clipsDirectory();
+      await dir.create(recursive: true);
+      _clipsDir = dir;
+      await _loadClips();
+    } on Object {
+      // Sans dossier, pas d'extraits.
+    }
     await _bind();
     final discovery = Discovery(
       announce: () =>
@@ -127,6 +135,7 @@ class CameraController extends ChangeNotifier {
   }
 
   Future<void> stopCamera() async {
+    await finishRecording();
     _measureTimer?.cancel();
     _measureTimer = null;
     for (final c in _connections) {
@@ -181,6 +190,139 @@ class CameraController extends ChangeNotifier {
     for (final c in _connections) {
       c.link.send({'type': 'alerte', 'genre': kind.name, 'heure': alert.at.toIso8601String()});
     }
+    unawaited(_record(kind, alert.at));
+  }
+
+  // ── Extraits ──
+
+  /// Durée d'un extrait, à partir de l'alerte.
+  static const clipLength = Duration(seconds: 30);
+
+  /// Nombre d'extraits gardés sur la caméra : au-delà, les plus anciens sont effacés.
+  static const maxClips = 30;
+
+  /// Taille d'un morceau envoyé à un écran (avant chiffrement et base64).
+  static const chunkBytes = 96 * 1024;
+
+  Directory? _clipsDir;
+
+  /// Extraits enregistrés, le plus récent d'abord.
+  List<CameraClip> clips = const [];
+  bool recording = false;
+  Timer? _recordTimer;
+
+  int get clipsBytes => clips.fold(0, (sum, c) => sum + c.bytes);
+
+  Future<void> _loadClips() async {
+    final dir = _clipsDir;
+    if (dir == null) return;
+    final found = <CameraClip>[];
+    try {
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final size = await entity.length();
+        final clip = size > 0 ? CameraClip.fromFile(entity.uri.pathSegments.last, size) : null;
+        if (clip != null) found.add(clip);
+      }
+    } on Object {
+      // Dossier illisible : aucun extrait.
+    }
+    found.sort((a, b) => b.at.compareTo(a.at));
+    clips = found;
+  }
+
+  Future<void> _record(AlertKind kind, DateTime at) async {
+    final dir = _clipsDir;
+    if (dir == null || recording || !running || !media.canRecord || !cameraSettings.recordClips) return;
+    recording = true;
+    if (!await media.startRecording('${dir.path}${Platform.pathSeparator}${CameraClip.fileName(at, kind)}')) {
+      recording = false;
+      return;
+    }
+    _recordTimer = Timer(clipLength, finishRecording);
+    if (!_disposed) notifyListeners();
+    _broadcastStatus();
+  }
+
+  /// Termine l'extrait en cours (au bout de 30 secondes, ou quand la caméra s'arrête).
+  Future<void> finishRecording() async {
+    _recordTimer?.cancel();
+    if (!recording) return;
+    await media.stopRecording();
+    recording = false;
+    await _loadClips();
+    while (clips.length > maxClips) {
+      await _deleteFile(clips.last.id);
+      clips = clips.sublist(0, clips.length - 1);
+    }
+    _broadcastClips();
+    if (!_disposed) notifyListeners();
+    _broadcastStatus();
+  }
+
+  Map<String, dynamic> get _clipsMessage => {
+    'type': 'extraits',
+    'liste': [for (final c in clips) c.toJson()],
+  };
+
+  void _broadcastClips() {
+    for (final c in _connections) {
+      c.link.send(_clipsMessage);
+    }
+  }
+
+  CameraClip? _clip(Object? id) => clips.where((c) => c.id == id).firstOrNull;
+
+  Future<void> _deleteFile(String id) async {
+    final dir = _clipsDir;
+    if (dir == null) return;
+    try {
+      await File('${dir.path}${Platform.pathSeparator}$id').delete();
+    } on Object {
+      // Déjà effacé.
+    }
+  }
+
+  /// Efface un extrait de la caméra.
+  Future<void> deleteClip(String id) async {
+    // Seuls les extraits connus sont effacés : un nom reçu ne désigne jamais un autre fichier.
+    if (_clip(id) == null) return;
+    await _deleteFile(id);
+    await _loadClips();
+    _broadcastClips();
+    if (!_disposed) notifyListeners();
+  }
+
+  Future<void> deleteAllClips() async {
+    for (final clip in clips) {
+      await _deleteFile(clip.id);
+    }
+    await _loadClips();
+    _broadcastClips();
+    notifyListeners();
+  }
+
+  /// Envoie un morceau d'extrait à un écran.
+  Future<void> _sendChunk(ScreenConnection c, Map<String, dynamic> message) async {
+    final clip = _clip(message['id']);
+    final offset = message['debut'];
+    final dir = _clipsDir;
+    if (clip == null || dir == null || offset is! int || offset < 0) {
+      await c.link.send({'type': 'morceau', 'id': message['id'], 'erreur': true});
+      return;
+    }
+    RandomAccessFile? file;
+    try {
+      file = await File('${dir.path}${Platform.pathSeparator}${clip.id}').open();
+      final total = await file.length();
+      await file.setPosition(offset);
+      final data = await file.read(chunkBytes);
+      await c.link.send({'type': 'morceau', 'id': clip.id, 'debut': offset, 'taille': total, 'donnees': b64(data)});
+    } on Object {
+      await c.link.send({'type': 'morceau', 'id': clip.id, 'erreur': true});
+    } finally {
+      await file?.close();
+    }
   }
 
   /// Lève une alerte à la main (tests et essai depuis l'interface).
@@ -207,6 +349,9 @@ class CameraController extends ChangeNotifier {
     motion: measures.motion,
     viewers: viewers,
     hasTorch: media.hasTorch,
+    canSwitchLens: media.canSwitchLens,
+    canRecord: media.canRecord,
+    recording: recording,
     settings: cameraSettings,
   );
 
@@ -321,6 +466,7 @@ class CameraController extends ChangeNotifier {
     _connections.add(connection);
     notifyListeners();
     await connection.link.send({'type': 'etat', 'etat': status.toJson()});
+    await connection.link.send(_clipsMessage);
     try {
       while (await it.moveNext()) {
         // Un écran oublié entre-temps est déconnecté.
@@ -367,6 +513,13 @@ class CameraController extends ChangeNotifier {
         _broadcastStatus();
       case 'reglages':
         await updateCameraSettings(CameraSettings.fromJson(message['reglages'], cameraSettings));
+      case 'extraits':
+        await c.link.send(_clipsMessage);
+      case 'morceau':
+        await _sendChunk(c, message);
+      case 'supprimerExtrait':
+        final id = message['id'];
+        if (id is String) await deleteClip(id);
     }
   }
 
@@ -424,6 +577,8 @@ class CameraController extends ChangeNotifier {
     _statusTimer?.cancel();
     _pairingTimer?.cancel();
     _measureTimer?.cancel();
+    _recordTimer?.cancel();
+    if (recording) await media.stopRecording();
     pendingPairing?.cancel();
     for (final c in _connections.toList()) {
       await c.session?.close();

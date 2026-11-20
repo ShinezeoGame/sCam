@@ -3,6 +3,8 @@
 #include <flutter/standard_method_codec.h>
 
 #include <optional>
+#include <string>
+#include <variant>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -28,8 +30,9 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
 
-  // Alerte d'une caméra : la fenêtre clignote dans la barre des tâches jusqu'à ce qu'on
-  // la regarde, et Windows joue son son de notification.
+  // Canal « scam/systeme » : alerte (la fenêtre clignote dans la barre des tâches et
+  // Windows joue son son de notification), veille empêchée pendant que la webcam filme,
+  // batterie d'un portable.
   system_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
       flutter_controller_->engine()->messenger(), "scam/systeme",
       &flutter::StandardMethodCodec::GetInstance());
@@ -44,6 +47,35 @@ bool FlutterWindow::OnCreate() {
           ::FlashWindowEx(&flash);
           ::MessageBeep(MB_ICONEXCLAMATION);
           result->Success();
+        } else if (call.method_name() == "serviceDemarrer") {
+          // Caméra (webcam du PC) : l'ordinateur ne se met pas en veille tant qu'elle filme.
+          // L'écran, lui, peut s'éteindre.
+          const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+          bool camera = false;
+          if (args) {
+            auto it = args->find(flutter::EncodableValue("mode"));
+            if (it != args->end()) {
+              const auto* mode = std::get_if<std::string>(&it->second);
+              camera = mode && *mode == "camera";
+            }
+          }
+          ::SetThreadExecutionState(camera ? (ES_CONTINUOUS | ES_SYSTEM_REQUIRED) : ES_CONTINUOUS);
+          result->Success();
+        } else if (call.method_name() == "serviceArreter") {
+          ::SetThreadExecutionState(ES_CONTINUOUS);
+          result->Success();
+        } else if (call.method_name() == "batterie") {
+          // Portable : charge et secteur. Un PC fixe n'a pas de batterie (aucune valeur).
+          flutter::EncodableMap battery;
+          SYSTEM_POWER_STATUS power;
+          if (::GetSystemPowerStatus(&power) && power.BatteryLifePercent <= 100 &&
+              (power.BatteryFlag & 128) == 0) {
+            battery[flutter::EncodableValue("niveau")] =
+                flutter::EncodableValue(static_cast<int>(power.BatteryLifePercent));
+            battery[flutter::EncodableValue("enCharge")] =
+                flutter::EncodableValue(power.ACLineStatus == 1);
+          }
+          result->Success(flutter::EncodableValue(battery));
         } else {
           result->NotImplemented();
         }
@@ -64,6 +96,7 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   system_channel_ = nullptr;
+  ::SetThreadExecutionState(ES_CONTINUOUS);
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

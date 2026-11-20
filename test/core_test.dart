@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scam/core/crypto.dart';
+import 'package:image/image.dart' as img;
 import 'package:scam/core/detection.dart';
+import 'package:scam/core/motion.dart';
 import 'package:scam/data/net/mjpeg_server.dart';
 import 'package:scam/data/net/pairing.dart';
 import 'package:scam/data/net/protocol.dart';
@@ -178,6 +181,40 @@ void main() {
       expect(pair.cameraMedia.sessions.single.closed, isTrue);
     });
 
+    test('extraits : enregistrés à l\'alerte, téléchargés, effacés', () async {
+      await pairDevices(pair);
+      final camera = pair.camera.camera!, screen = pair.screen.screen!;
+      camera.debugRaise(AlertKind.motion);
+      await until(() => camera.recording);
+      expect(pair.cameraMedia.recordingTo, endsWith('-mouvement.mp4'));
+      // Une seconde alerte pendant l'enregistrement ne lance pas un second extrait.
+      camera.debugRaise(AlertKind.noise);
+      await camera.finishRecording();
+      expect(camera.clips, hasLength(1));
+      await until(() => screen.camera('cam')!.clips.length == 1);
+      final clip = screen.camera('cam')!.clips.single;
+      expect(clip.kind, AlertKind.motion);
+      expect(clip.bytes, 250 * 1024);
+
+      // Téléchargement en trois morceaux chiffrés, contenu identique.
+      await screen.download('cam', clip);
+      final saved = screen.camera('cam')!.saved[clip.id]!;
+      final original = File('${pair.temp.path}/camera/${clip.id}').readAsBytesSync();
+      expect(File(saved).readAsBytesSync(), original);
+      expect(screen.camera('cam')!.downloads, isEmpty);
+
+      // La caméra n'envoie que ses extraits connus : un autre nom est refusé, rien n'est rangé.
+      final unknown = CameraClip(id: '20200101-000000-bruit.mp4', at: DateTime(2020), kind: AlertKind.noise, bytes: 1);
+      await screen.download('cam', unknown);
+      expect(screen.camera('cam')!.saved.containsKey(unknown.id), isFalse);
+      expect(pair.screen.notice?.error, isTrue);
+      expect(CameraClip.fromFile('../../shared_prefs.xml', 10), isNull);
+
+      await screen.deleteClip('cam', clip.id);
+      await until(() => screen.camera('cam')!.clips.isEmpty);
+      expect(File('${pair.temp.path}/camera/${clip.id}').existsSync(), isFalse);
+    });
+
     test('un code refusé n\'appaire rien', () async {
       final camera = pair.camera.camera!, screen = pair.screen.screen!;
       camera.openPairing();
@@ -221,6 +258,28 @@ void main() {
       await until(() => pair.screen.screen!.camera('cam')?.online == false);
       await until(() => pair.screen.screen!.camera('cam')?.error != null, timeout: const Duration(seconds: 15));
       expect(pair.screen.screen!.camera('cam')!.error, contains('appairez'));
+    });
+  });
+
+  group('mouvement (webcam du PC)', () {
+    test('une lampe qui s\'allume n\'est pas un mouvement, un objet qui bouge oui', () {
+      final before = Uint8List.fromList(List.filled(gridWidth * gridHeight, 80));
+      final brighter = Uint8List.fromList(List.filled(gridWidth * gridHeight, 150));
+      expect(motionBetween(before, brighter), 0);
+      final moved = Uint8List.fromList(before);
+      for (var i = 0; i < moved.length ~/ 5; i++) {
+        moved[i] = 220;
+      }
+      expect(motionBetween(before, moved), closeTo(0.2, 0.01));
+    });
+
+    test('grille lue dans une image PNG', () {
+      final image = img.Image(width: 320, height: 240);
+      img.fill(image, color: img.ColorRgb8(200, 200, 200));
+      final grid = luminanceGrid(Uint8List.fromList(img.encodePng(image)))!;
+      expect(grid, hasLength(gridWidth * gridHeight));
+      expect(grid.every((v) => v == 200), isTrue);
+      expect(toJpeg(Uint8List.fromList(img.encodePng(image)))!.take(2), [0xFF, 0xD8]);
     });
   });
 

@@ -4,8 +4,8 @@
 
 ## Comment ça marche
 
-sCam est une application [Flutter](https://flutter.dev), avec le même code pour Android
-(caméra et écran) et Windows (écran).
+sCam est une application [Flutter](https://flutter.dev), avec le même code pour Android et
+Windows, chacun pouvant être caméra ou écran.
 
 - **Découverte** : la caméra annonce son nom toutes les quatre secondes par un petit message
   UDP (multidiffusion et diffusion, port 47880). Un écran qui démarre envoie une « sonde » à
@@ -29,6 +29,16 @@ sCam est une application [Flutter](https://flutter.dev), avec le même code pour
   sonore, part de l'image qui change sur une grille de 64 × 48, et JPEG pour le flux MJPEG.
   Pour que le micro reste ouvert quand personne ne regarde, la caméra garde une liaison
   WebRTC interne vers elle-même (son coupé). `lib/core/detection.dart` décide des alertes.
+- **Webcam du PC** (`lib/core/motion.dart`) : sous Windows, le niveau sonore vient des
+  statistiques WebRTC de la liaison interne (`media-source`, `audioLevel`), et le mouvement
+  d'une image capturée chaque seconde (`captureFrame`, PNG) réduite à la même grille, dans un
+  isolat. Le changement global de luminosité retiré est la médiane des écarts, comme sur
+  Android. Le PC ne se met pas en veille pendant qu'il filme (`SetThreadExecutionState`).
+- **Extraits** : à chaque alerte, une caméra Android enregistre 30 s (`MediaRecorder` de
+  `flutter_webrtc`, MP4) dans son espace privé, et garde les 30 derniers. Les écrans
+  reçoivent la liste (`extraits`), téléchargent par morceaux de 96 Ko demandés un à un
+  (`morceau`, dans la liaison chiffrée) et peuvent effacer (`supprimerExtrait`). La caméra
+  ne sert que les fichiers de sa liste, dont le nom suit un format strict.
 - **Arrière-plan** : `ScamService.kt`, service au premier plan (caméra + micro pour la
   caméra ; appareil connecté + lecture pour l'écran), avec verrous de veille et Wi-Fi.
 - **MJPEG** (`lib/data/net/mjpeg_server.dart`) : port 47881, désactivé par défaut, mot de
@@ -45,7 +55,8 @@ flutter run -d windows
 
 - Vérifications : `dart format -l 120 lib test`, `flutter analyze` et `flutter test`.
   `test/core_test.dart` fait dialoguer une vraie caméra et un vrai écran sCam sur la machine
-  (découverte, appairage, code refusé, intrus, alertes, signalisation, réglages, MJPEG), avec
+  (découverte, appairage, code refusé, intrus, alertes, extraits, signalisation, réglages,
+  MJPEG), avec
   une caméra et un WebRTC simulés (`test/support/harness.dart`). `test/app_test.dart`
   parcourt l'interface à trois tailles de fenêtre, en clair et en sombre.
 - Captures de la documentation : `SCAM_CAPTURES=1 flutter test test/captures_test.dart`.

@@ -52,6 +52,17 @@ abstract class CameraMedia {
 
   /// Aperçu local.
   Widget preview();
+
+  /// La caméra sait enregistrer des extraits (Android).
+  bool get canRecord;
+
+  /// Objectifs avant et arrière (téléphone) ; faux pour une webcam.
+  bool get canSwitchLens;
+
+  /// Commence à enregistrer l'image et le son dans un fichier MP4 ; faux si impossible.
+  Future<bool> startRecording(String path);
+
+  Future<void> stopRecording();
 }
 
 /// Réception d'une caméra sur l'écran.
