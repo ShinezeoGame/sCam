@@ -1,5 +1,7 @@
 #include "flutter_window.h"
 
+#include <flutter/standard_method_codec.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -25,6 +27,27 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+
+  // Alerte d'une caméra : la fenêtre clignote dans la barre des tâches jusqu'à ce qu'on
+  // la regarde, et Windows joue son son de notification.
+  system_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(), "scam/systeme",
+      &flutter::StandardMethodCodec::GetInstance());
+  system_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        if (call.method_name() == "alerte") {
+          FLASHWINFO flash = {};
+          flash.cbSize = sizeof(flash);
+          flash.hwnd = GetHandle();
+          flash.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG;
+          ::FlashWindowEx(&flash);
+          ::MessageBeep(MB_ICONEXCLAMATION);
+          result->Success();
+        } else {
+          result->NotImplemented();
+        }
+      });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,6 +63,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  system_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

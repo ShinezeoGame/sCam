@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.shinezeogame" "\0"
-            VALUE "FileDescription", "scam" "\0"
+            VALUE "CompanyName", "ShinezeoGame" "\0"
+            VALUE "FileDescription", "sCam" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "scam" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.shinezeogame. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 ShinezeoGame" "\0"
             VALUE "OriginalFilename", "scam.exe" "\0"
-            VALUE "ProductName", "scam" "\0"
+            VALUE "ProductName", "sCam" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

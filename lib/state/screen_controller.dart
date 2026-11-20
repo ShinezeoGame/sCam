@@ -405,11 +405,18 @@ class ScreenController extends ChangeNotifier {
   }
 
   @visibleForTesting
-  void debugSetCamera(PairedDevice device, {CameraStatus? status, bool online = false, CameraAlert? lastAlert}) {
+  void debugSetCamera(
+    PairedDevice device, {
+    CameraStatus? status,
+    bool online = false,
+    CameraAlert? lastAlert,
+    ViewerSession? session,
+  }) {
     final link = _links[device.id] ?? CameraLink(device);
     link
       ..status = status
-      ..lastAlert = lastAlert;
+      ..lastAlert = lastAlert
+      ..session = session;
     _links[device.id] = link;
     if (online) _debugOnline.add(device.id);
     notifyListeners();

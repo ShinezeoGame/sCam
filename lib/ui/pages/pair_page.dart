@@ -29,11 +29,12 @@ class _PairPageState extends State<PairPage> {
     final app = AppScope.of(context);
     final screen = app.screen;
     final t = context.text;
-    if (screen == null)
+    if (screen == null) {
       return const AppPage(
         header: PageHeader(title: 'Ajouter une caméra'),
         children: [],
       );
+    }
     final pairing = screen.pairing;
     final found = screen.pairable;
     return AppPage(

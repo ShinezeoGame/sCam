@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Petite icône des notifications : le dessin du logo (caméra vidéo), d'un seul trait blanc. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <path
+        android:pathData="M316 380 H524 A72 72 0 0 1 596 452 V572 A72 72 0 0 1 524 644 H316 A72 72 0 0 1 244 572 V452 A72 72 0 0 1 316 380 Z M596 470 L780 404 V620 L596 554 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="92"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>
